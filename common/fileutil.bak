@@ -1,0 +1,27 @@
+package common
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// IsDirExists checks if a directory exists.
+func IsDirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// CopyFile copies a file from src to dst.
+func CopyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	// Using 0600 permissions to be safe with potentially sensitive files.
+	return os.WriteFile(dst, data, 0600)
+}
+
+// TempFilename generates a path for a temporary file in the OS temp dir.
+func TempFilename(prefix string) string {
+	return filepath.Join(os.TempDir(), prefix)
+}

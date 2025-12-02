@@ -1,0 +1,713 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+browser.go
+chromium_darwin.go
+chromium_windows.go
+chromium.go
+common/fileutil.go
+common/types.go
+crypto/crypto_darwin.go
+crypto/crypto.go
+crypto/crytpo_windows.go
+go.mod
+main.go
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="browser.go">
+package main
+
+import (
+	"fmt"
+	"os"
+	"runtime"
+	"unibrows/common"
+)
+
+// Browser is an interface that all browser-specific extractors must implement.
+type Browser interface {
+	// Extract extracts cookie and bookmark data.
+	Extract() (*common.ExtractedData, error)
+}
+
+// browserInfo contains the default path and type for a known browser.
+type browserInfo struct {
+	name        string
+	profilePath string
+	storageName string // Used for macOS keychain
+}
+
+var (
+	homeDir, _   = os.UserHomeDir()
+	browserPaths = make(map[string]map[string]browserInfo)
+)
+
+// init populates the browserPaths map for the current OS.
+func init() {
+	switch runtime.GOOS {
+	case "windows":
+		browserPaths["windows"] = map[string]browserInfo{
+			"chrome": {
+				name:        "Chrome",
+				profilePath: homeDir + "/AppData/Local/Google/Chrome/User Data/Default",
+			},
+			"edge": {
+				name:        "Microsoft Edge",
+				profilePath: homeDir + "/AppData/Local/Microsoft/Edge/User Data/Default",
+			},
+			"firefox": {
+				name:        "Firefox",
+				profilePath: homeDir + "/AppData/Roaming/Mozilla/Firefox/Profiles/",
+			},
+			// Add other chromium-based browsers here...
+		}
+	case "darwin":
+		browserPaths["darwin"] = map[string]browserInfo{
+			"chrome": {
+				name:        "Chrome",
+				profilePath: homeDir + "/Library/Application Support/Google/Chrome/Default",
+				storageName: "Chrome Safe Storage",
+			},
+			"edge": {
+				name:        "Microsoft Edge",
+				profilePath: homeDir + "/Library/Application Support/Microsoft Edge/Default",
+				storageName: "Microsoft Edge Safe Storage",
+			},
+			"firefox": {
+				name:        "Firefox",
+				profilePath: homeDir + "/Library/Application Support/Firefox/Profiles/",
+			},
+			// Add other chromium-based browsers here...
+		}
+	}
+}
+
+// GetBrowser returns a browser extractor instance.
+// browserName should be "chrome", "firefox", etc.
+func GetBrowser(browserName string) (Browser, error) {
+	osPaths, ok := browserPaths[runtime.GOOS]
+	if !ok {
+		return nil, fmt.Errorf("operating system not supported: %s", runtime.GOOS)
+	}
+
+	info, ok := osPaths[browserName]
+	if !ok {
+		return nil, fmt.Errorf("browser not supported: %s", browserName)
+	}
+
+	// For Firefox, we need to find the actual profile directory.
+	if browserName == "firefox" {
+		// A real implementation would walk the directory to find the *.default-release folder.
+		// For simplicity, we can add a helper for this later. For now, we assume a known path.
+		// This is a point of simplification from the original project.
+	}
+
+	if !common.IsDirExists(info.profilePath) {
+		return nil, fmt.Errorf("profile path for %s not found at %s", info.name, info.profilePath)
+	}
+
+	switch browserName {
+	case "firefox":
+		return nil, fmt.Errorf("firefox support not yet implemented")
+		// Placeholder for future Firefox implementation
+		// return NewFirefox(info.profilePath), nil
+	default: // Assume Chromium-based
+		return NewChromium(info.name, info.profilePath, info.storageName), nil
+	}
+}
+</file>
+
+<file path="chromium_darwin.go">
+//go:build darwin
+
+package main
+
+// ... imports from original `chromium_darwin.go`
+
+func (c *Chromium) getMasterKeyOS() ([]byte, error) {
+	// ... copy the logic from original `chromium_darwin.go`'s GetMasterKey method ...
+	// It involves running the 'security' command.
+	return nil, nil // Placeholder
+}
+</file>
+
+<file path="chromium_windows.go">
+//go:build windows
+
+package main
+
+import (
+	"encoding/base64"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"unibrows/crypto"
+
+	"github.com/tidwall/gjson"
+)
+
+func (c *Chromium) getMasterKeyOS() ([]byte, error) {
+	localStatePath := filepath.Join(c.profilePath, "..", "Local State")
+
+	content, err := os.ReadFile(localStatePath)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedKey := gjson.GetBytes(content, "os_crypt.encrypted_key")
+	if !encryptedKey.Exists() {
+		return nil, fmt.Errorf("encrypted_key not found in Local State")
+	}
+
+	key, err := base64.StdEncoding.DecodeString(encryptedKey.String())
+	if err != nil {
+		return nil, err
+	}
+
+	// The key is prefixed with 'DPAPI', which we need to remove.
+	return crypto.DecryptWithDPAPI(key[5:])
+}
+</file>
+
+<file path="chromium.go">
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite" // SQLite driver
+
+	"unibrows/common"
+)
+
+// Chromium implements the Browser interface for Chromium-based browsers.
+type Chromium struct {
+	name        string
+	profilePath string
+	storageName string // For macOS keychain
+	masterKey   []byte
+}
+
+func NewChromium(name, profilePath, storageName string) *Chromium {
+	return &Chromium{name: name, profilePath: profilePath, storageName: storageName}
+}
+
+func (c *Chromium) Extract() (*common.ExtractedData, error) {
+	data := &common.ExtractedData{
+		Browser: c.name,
+		Profile: c.profilePath,
+	}
+
+	var err error
+	c.masterKey, err = c.getMasterKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get master key: %w", err)
+	}
+
+	cookies, err := c.extractCookies()
+	if err != nil {
+		// Log error but continue, so we can still get bookmarks
+		fmt.Printf("could not extract cookies for %s: %v\n", c.name, err)
+	}
+	data.Cookies = cookies
+
+	bookmarks, err := c.extractBookmarks()
+	if err != nil {
+		fmt.Printf("could not extract bookmarks for %s: %v\n", c.name, err)
+	}
+	data.Bookmarks = bookmarks
+
+	return data, nil
+}
+
+func (c *Chromium) extractCookies() ([]common.Cookie, error) {
+	// Path to the cookie database
+	cookieDBPath := filepath.Join(c.profilePath, "Network", "Cookies")
+
+	// Copy the database to a temp file
+	tmpDB := common.TempFilename("gobrowse_cookies.db")
+	defer os.Remove(tmpDB)
+	if err := common.CopyFile(cookieDBPath, tmpDB); err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("sqlite", tmpDB)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
+	// Query logic from original `cookie.go`
+	// ... (code to query and decrypt cookies) ...
+
+	return []common.Cookie{}, nil // Placeholder
+}
+
+func (c *Chromium) extractBookmarks() ([]common.Bookmark, error) {
+	// Path to bookmarks file
+	bookmarkPath := filepath.Join(c.profilePath, "Bookmarks")
+
+	content, err := os.ReadFile(bookmarkPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var bookmarks []common.Bookmark
+	// Logic from original `bookmark.go` to parse the JSON
+	// ... (code to parse JSON and extract bookmarks) ...
+
+	return bookmarks, nil
+}
+
+// getMasterKey is a platform-specific method to retrieve the master key.
+func (c *Chromium) getMasterKey() ([]byte, error) {
+	// This will call the correct implementation based on the build OS.
+	return c.getMasterKeyOS()
+}
+
+// Stub implementation for non-Windows/Darwin to satisfy the compiler
+// This file would be named chromium_other.go with a build tag.
+// For now, we'll keep it simple and rely on the user not building on Linux.
+</file>
+
+<file path="common/fileutil.go">
+package common
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// IsDirExists checks if a directory exists.
+func IsDirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// CopyFile copies a file from src to dst.
+func CopyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	// Using 0600 permissions to be safe with potentially sensitive files.
+	return os.WriteFile(dst, data, 0600)
+}
+
+// TempFilename generates a path for a temporary file in the OS temp dir.
+func TempFilename(prefix string) string {
+	return filepath.Join(os.TempDir(), prefix)
+}
+</file>
+
+<file path="common/types.go">
+package common
+
+import "time"
+
+// ExtractedData holds all the data extracted from a browser.
+type ExtractedData struct {
+	Browser   string
+	Profile   string
+	Cookies   []Cookie
+	Bookmarks []Bookmark
+}
+
+// Cookie represents a single browser cookie.
+type Cookie struct {
+	Host       string    `json:"host"`
+	Path       string    `json:"path"`
+	KeyName    string    `json:"key_name"`
+	Value      string    `json:"value"`
+	IsSecure   bool      `json:"is_secure"`
+	IsHTTPOnly bool      `json:"is_http_only"`
+	CreateDate time.Time `json:"create_date"`
+	ExpireDate time.Time `json:"expire_date"`
+}
+
+// Bookmark represents a single browser bookmark.
+type Bookmark struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	DateAdded time.Time `json:"date_added"`
+}
+</file>
+
+<file path="crypto/crypto_darwin.go">
+//go:build darwin
+
+package crypto
+
+func DecryptWithChromium(key, password []byte) ([]byte, error) {
+	if len(password) <= 3 {
+		return nil, ErrCiphertextLengthIsInvalid
+	}
+	iv := []byte{32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32}
+	return AES128CBCDecrypt(key, iv, password[3:])
+}
+
+func DecryptWithDPAPI(_ []byte) ([]byte, error) {
+	return nil, nil
+}
+</file>
+
+<file path="crypto/crypto.go">
+package crypto
+
+import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/des"
+	"errors"
+	"fmt"
+)
+
+var ErrCiphertextLengthIsInvalid = errors.New("ciphertext length is invalid")
+
+func AES128CBCDecrypt(key, iv, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	// Check ciphertext length
+	if len(ciphertext) < aes.BlockSize {
+		return nil, errors.New("AES128CBCDecrypt: ciphertext too short")
+	}
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return nil, errors.New("AES128CBCDecrypt: ciphertext is not a multiple of the block size")
+	}
+
+	decryptedData := make([]byte, len(ciphertext))
+	mode := cipher.NewCBCDecrypter(block, iv)
+	mode.CryptBlocks(decryptedData, ciphertext)
+
+	// unpad the decrypted data and handle potential padding errors
+	decryptedData, err = pkcs5UnPadding(decryptedData)
+	if err != nil {
+		return nil, fmt.Errorf("AES128CBCDecrypt: %w", err)
+	}
+
+	return decryptedData, nil
+}
+
+func AES128CBCEncrypt(key, iv, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(iv) != aes.BlockSize {
+		return nil, errors.New("AES128CBCEncrypt: iv length is invalid, must equal block size")
+	}
+
+	plaintext = pkcs5Padding(plaintext, block.BlockSize())
+	encryptedData := make([]byte, len(plaintext))
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(encryptedData, plaintext)
+
+	return encryptedData, nil
+}
+
+func DES3Decrypt(key, iv, ciphertext []byte) ([]byte, error) {
+	block, err := des.NewTripleDESCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	if len(ciphertext) < des.BlockSize {
+		return nil, errors.New("DES3Decrypt: ciphertext too short")
+	}
+	if len(ciphertext)%block.BlockSize() != 0 {
+		return nil, errors.New("DES3Decrypt: ciphertext is not a multiple of the block size")
+	}
+
+	blockMode := cipher.NewCBCDecrypter(block, iv)
+	sq := make([]byte, len(ciphertext))
+	blockMode.CryptBlocks(sq, ciphertext)
+
+	return pkcs5UnPadding(sq)
+}
+
+func DES3Encrypt(key, iv, plaintext []byte) ([]byte, error) {
+	block, err := des.NewTripleDESCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	plaintext = pkcs5Padding(plaintext, block.BlockSize())
+	dst := make([]byte, len(plaintext))
+	blockMode := cipher.NewCBCEncrypter(block, iv)
+	blockMode.CryptBlocks(dst, plaintext)
+
+	return dst, nil
+}
+
+// AESGCMDecrypt chromium > 80 https://source.chromium.org/chromium/chromium/src/+/master:components/os_crypt/sync/os_crypt_win.cc
+func AESGCMDecrypt(key, nounce, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	blockMode, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	origData, err := blockMode.Open(nil, nounce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	return origData, nil
+}
+
+// AESGCMEncrypt encrypts plaintext using AES encryption in GCM mode.
+func AESGCMEncrypt(key, nonce, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	blockMode, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	// The first parameter is the prefix for the output, we can leave it nil.
+	// The Seal method encrypts and authenticates the data, appending the result to the dst.
+	encryptedData := blockMode.Seal(nil, nonce, plaintext, nil)
+	return encryptedData, nil
+}
+
+func paddingZero(src []byte, length int) []byte {
+	padding := length - len(src)
+	if padding <= 0 {
+		return src
+	}
+	return append(src, make([]byte, padding)...)
+}
+
+func pkcs5UnPadding(src []byte) ([]byte, error) {
+	length := len(src)
+	if length == 0 {
+		return nil, errors.New("pkcs5UnPadding: src should not be empty")
+	}
+	padding := int(src[length-1])
+	if padding < 1 || padding > aes.BlockSize {
+		return nil, errors.New("pkcs5UnPadding: invalid padding size")
+	}
+	return src[:length-padding], nil
+}
+
+func pkcs5Padding(src []byte, blocksize int) []byte {
+	padding := blocksize - (len(src) % blocksize)
+	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, padText...)
+}
+</file>
+
+<file path="crypto/crytpo_windows.go">
+//go:build windows
+
+package crypto
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+)
+
+const (
+	// Assuming the nonce size is 12 bytes and the minimum encrypted data size is 3 bytes
+	minEncryptedDataSize = 15
+	nonceSize            = 12
+)
+
+func DecryptWithChromium(key, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < minEncryptedDataSize {
+		return nil, ErrCiphertextLengthIsInvalid
+	}
+
+	nonce := ciphertext[3 : 3+nonceSize]
+	encryptedPassword := ciphertext[3+nonceSize:]
+
+	return AESGCMDecrypt(key, nonce, encryptedPassword)
+}
+
+// DecryptWithYandex decrypts the password with AES-GCM
+func DecryptWithYandex(key, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < minEncryptedDataSize {
+		return nil, ErrCiphertextLengthIsInvalid
+	}
+	// remove Prefix 'v10'
+	// gcmBlockSize         = 16
+	// gcmTagSize           = 16
+	// gcmMinimumTagSize    = 12 // NIST SP 800-38D recommends tags with 12 or more bytes.
+	// gcmStandardNonceSize = 12
+	nonce := ciphertext[3 : 3+nonceSize]
+	encryptedPassword := ciphertext[3+nonceSize:]
+	return AESGCMDecrypt(key, nonce, encryptedPassword)
+}
+
+type dataBlob struct {
+	cbData uint32
+	pbData *byte
+}
+
+func newBlob(d []byte) *dataBlob {
+	if len(d) == 0 {
+		return &dataBlob{}
+	}
+	return &dataBlob{
+		pbData: &d[0],
+		cbData: uint32(len(d)),
+	}
+}
+
+func (b *dataBlob) bytes() []byte {
+	d := make([]byte, b.cbData)
+	copy(d, (*[1 << 30]byte)(unsafe.Pointer(b.pbData))[:])
+	return d
+}
+
+// DecryptWithDPAPI (Data Protection Application Programming Interface)
+// is a simple cryptographic application programming interface
+// available as a built-in component in Windows 2000 and
+// later versions of Microsoft Windows operating systems
+func DecryptWithDPAPI(ciphertext []byte) ([]byte, error) {
+	crypt32 := syscall.NewLazyDLL("Crypt32.dll")
+	kernel32 := syscall.NewLazyDLL("Kernel32.dll")
+	unprotectDataProc := crypt32.NewProc("CryptUnprotectData")
+	localFreeProc := kernel32.NewProc("LocalFree")
+
+	var outBlob dataBlob
+	r, _, err := unprotectDataProc.Call(
+		uintptr(unsafe.Pointer(newBlob(ciphertext))),
+		0, 0, 0, 0, 0,
+		uintptr(unsafe.Pointer(&outBlob)),
+	)
+	if r == 0 {
+		return nil, fmt.Errorf("CryptUnprotectData failed with error %w", err)
+	}
+
+	defer localFreeProc.Call(uintptr(unsafe.Pointer(outBlob.pbData)))
+	return outBlob.bytes(), nil
+}
+</file>
+
+<file path="go.mod">
+module unibrows
+
+go 1.25.1
+
+require (
+	github.com/tidwall/gjson v1.18.0
+	modernc.org/sqlite v1.40.1
+)
+
+require (
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	modernc.org/libc v1.66.10 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+)
+</file>
+
+<file path="main.go">
+package main
+
+import (
+	"fmt"
+	"unibrows/common"
+)
+
+// ExtractData is the main entrypoint for the library.
+// It attempts to extract cookies and bookmarks from the specified browser.
+// If profilePath is empty, it uses the default path for the browser.
+func ExtractData(browserName string, profilePath ...string) (*common.ExtractedData, error) {
+	var browser Browser
+	var err error
+
+	// For now, we only support default profiles. Custom paths would require more logic.
+	if len(profilePath) > 0 {
+		return nil, fmt.Errorf("custom profile paths are not yet supported")
+	}
+
+	browser, err = GetBrowser(browserName)
+	if err != nil {
+		return nil, err
+	}
+
+	return browser.Extract()
+}
+
+// Example of how to use the library
+func Example() {
+	// Extract data from Google Chrome's default profile
+	chromeData, err := ExtractData("chrome")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Found %d cookies and %d bookmarks in Chrome.\n", len(chromeData.Cookies), len(chromeData.Bookmarks))
+
+	// Extract data from Firefox
+	firefoxData, err := ExtractData("firefox")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Found %d cookies and %d bookmarks in Firefox.\n", len(firefoxData.Cookies), len(firefoxData.Bookmarks))
+}
+</file>
+
+</files>

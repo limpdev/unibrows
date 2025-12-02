@@ -1,0 +1,31 @@
+package common
+
+import "time"
+
+// ExtractedData holds all the data extracted from a browser.
+type ExtractedData struct {
+	Browser   string
+	Profile   string
+	Cookies   []Cookie
+	Bookmarks []Bookmark
+}
+
+// Cookie represents a single browser cookie.
+type Cookie struct {
+	Host       string    `json:"host"`
+	Path       string    `json:"path"`
+	KeyName    string    `json:"key_name"`
+	Value      string    `json:"value"`
+	IsSecure   bool      `json:"is_secure"`
+	IsHTTPOnly bool      `json:"is_http_only"`
+	CreateDate time.Time `json:"create_date"`
+	ExpireDate time.Time `json:"expire_date"`
+}
+
+// Bookmark represents a single browser bookmark.
+type Bookmark struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	DateAdded time.Time `json:"date_added"`
+}
