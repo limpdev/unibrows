@@ -40,7 +40,7 @@ func init() {
 				name:        "Brave",
 				profilePath: filepath.Join(homeDir, "AppData", "Local", "BraveSoftware", "Brave-Browser", "User Data", "Default"),
 			},
-			"opera": {
+			"thorium": {
 				name:        "Thorium",
 				profilePath: filepath.Join(homeDir, "AppData", "Local", "Thorium", "User Data", "Default"),
 			},
