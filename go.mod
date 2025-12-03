@@ -1,4 +1,4 @@
-module unibrows
+module github.com/limpdev/unibrows
 
 go 1.25.1
 
