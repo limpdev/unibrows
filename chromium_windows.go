@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"unibrows/crypto"
+	"github.com/limpdev/unibrows/crypto"
 
 	"github.com/tidwall/gjson"
 )

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"unibrows/crypto"
+	"github.com/limpdev/unibrows/crypto"
 
 	_ "modernc.org/sqlite"
 )
@@ -86,15 +86,15 @@ func (c *chromium) extractCookies() (Cookies, error) {
 
 	// Query cookies
 	rows, err := db.Query(`
-		SELECT 
-			host_key, 
-			path, 
-			name, 
-			encrypted_value, 
-			is_secure, 
+		SELECT
+			host_key,
+			path,
+			name,
+			encrypted_value,
+			is_secure,
 			is_httponly,
 			samesite,
-			creation_utc, 
+			creation_utc,
 			expires_utc
 		FROM cookies
 	`)
